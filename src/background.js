@@ -1,45 +1,49 @@
-const inactiveTabs = new Map()
+const inactiveTabsProcessId = new Map()
 const groupedTabs = new Map()
 const wastefulTabs = new Map()
 
-let fallbackWindowId = undefined
 let properties = {
-    autosave: false
+    autosave: true,
+    telemetry: true,
+    unseenTabs: 0
 
 }
-const CPU_THRESHOLD = 7
+let lastHighlightEventTime = 0
+const CPU_THRESHOLD = 1
 const MEM_THRESHOLD_INCREASE = 0.01
 const MEM_MAX_ENTRIES = 7
 const MEM_MIN_ENTRIES = 2
 const NETWORK_MAX_ENTRIES = 7
-const CPU_MAX_ENTRIES = 1
-const MAX_THROTTLE = 10000
-const MAX_TIMEOUT_UPDATE_TABS = 1000
+const CPU_MAX_ENTRIES = 7
+const MAX_THROTTLE_UPDATE_INACTIVE_TABS = 10000
+const MAX_THROTTLE_QUERY_TABS = 3000
+const RESET_TABS_TIME = 60 * 60 * 1000
+const TELEMETRY_TIME = 24 * 60 * 60 * 1000
 
 function queryTabs() {
     chrome.tabs.query({}, (tabs) => {
-        fallbackWindowId = tabs[0].windowId
-        tabs.filter(tab => !tab.active && tab.id ? addTab(tab.id) : false)
+        tabs.filter(tab => !tab.active && tab.id && (tab.status === 'complete') ? addTab(tab.id) : false)
     })
 }
 
 function addTab(tabId) {
-    chrome.processes.getProcessIdForTab(tabId, pId => inactiveTabs.set(tabId, pId))
+    chrome.processes.getProcessIdForTab(tabId, pId => inactiveTabsProcessId.set(tabId, pId))
     return false
 }
 
 function removeTab(tabId) {
-    console.log('removing tab', tabId)
-    inactiveTabs.delete(tabId)
+    inactiveTabsProcessId.delete(tabId)
     wastefulTabs.delete(tabId)
 
     const groupedTabsMap = Array.from(groupedTabs.entries())[0]
-    const groupId = groupedTabsMap[0]
-    const groupedTabValues = groupedTabsMap[1]
-    if (groupedTabValues.length > 1) {
-        groupedTabs.set(groupId, groupedTabValues.filter(tId => tId !== tabId))
-    } else {
-        groupedTabs.delete(groupId)
+    if (groupedTabsMap) {
+        const groupId = groupedTabsMap[0]
+        const groupedTabValues = groupedTabsMap[1]
+        if (groupedTabValues.length > 1) {
+            groupedTabs.set(groupId, groupedTabValues.filter(tId => tId !== tabId))
+        } else {
+            groupedTabs.delete(groupId)
+        }
     }
 
 }
@@ -53,24 +57,37 @@ function computePrivateMemRate(mem, currentMem) {
 }
 
 function shouldThrottleTab(initialTime, finalTime) {
-    return (finalTime - initialTime) < MAX_THROTTLE
+    return (finalTime - initialTime) < MAX_THROTTLE_UPDATE_INACTIVE_TABS
 }
 
 async function groupTabOrRemove(tabs, tabId, groupId, reason) {
     await addTabToGroup(tabs, tabId, groupId)
-    console.log(properties.autosave, 'autosave')
+
     if (properties.autosave) {
         const currentGroupedTabs = Array.from(groupedTabs.entries())[0][1]
         let formatedTabs = []
         console.log('tabs', currentGroupedTabs)
-        await Promise.all(currentGroupedTabs.map(async (tabId) => {
-            await chrome.tabs.get(tabId, ({ title, url, id }) => formatedTabs = [...formatedTabs, { title, url, id, reason }])
+        await Promise.all(currentGroupedTabs.map((tabId) => {
+            chrome.tabs.get(tabId, (tab) => {
+                return new Promise((resolve, reject) => {
+                    if (chrome.runtime.lastError) {
+                        if (chrome.runtime.lastError.message.includes('No tab with id')) {
+                            removeTab(tabId)
+                            reject()
+                        }
+                    }
+                    formatedTabs = [...formatedTabs, { ...{ favIconUrl, title, url, id } = tab, reason },]
+                    resolve()
+                })
+            })
+
         }))
         chrome.tabs.remove(currentGroupedTabs, () => {
             sendMessage({ tabs: formatedTabs })
             updateStorage({ tabs: formatedTabs })
         })
     }
+
 }
 
 async function getProcessInfoAndSetMap({ tab, cpu, network, processId }) {
@@ -85,7 +102,8 @@ async function getProcessInfoAndSetMap({ tab, cpu, network, processId }) {
     }
     if (!tabs.length || !tabs.includes(tabId)) {
         await chrome.processes.getProcessInfo(processId, true, async (processes) => {
-            const { privateMemory } = processes[processId]
+
+            const privateMemory = processes[processId]?.privateMemory
             const timeNow = Date.now()
 
             let payload = wastefulTabs.get(tabId) || {
@@ -134,16 +152,13 @@ async function getProcessInfoAndSetMap({ tab, cpu, network, processId }) {
 }
 
 function addTabToGroup(tabs, tabId, groupId) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         if (groupId && !tabs.includes(tabId)) {
-            console.log('found wasteful tab', tabId)
             chrome.tabs.group({ tabIds: tabId, groupId }, (groupId) => {
-                if (!groupId) {
-                    //retry with fallbackWindowId
-                    chrome.tabs.group({ tabIds: tabId, createProperties: { ...(fallbackWindowId ? { windowId: fallbackWindowId } : {}) } }, (groupId) => {
-                        if (groupId) groupedTabs.set(groupId, [...tabs, tabId])
-                        resolve()
-                    })
+                if (chrome.runtime.error) {
+                    if (chrome.runtime.error.messgae.includes('No group with id')) {
+                        groupedTabs.delete(groupId)
+                    }
                 } else {
                     groupedTabs.set(groupId, [...tabs, tabId])
                     resolve()
@@ -151,12 +166,10 @@ function addTabToGroup(tabs, tabId, groupId) {
             })
         } else {
             chrome.tabs.group({ tabIds: tabId }, (groupId) => {
-                if (!groupId) {
-                    //retry with fallbackWindowId
-                    chrome.tabs.group({ tabIds: tabId, createProperties: { ...(fallbackWindowId ? { windowId: fallbackWindowId } : {}) } }, (groupId) => {
-                        if (groupId) groupedTabs.set(groupId, [...tabs, tabId])
-                        resolve()
-                    })
+                if (chrome.runtime.error) {
+                    console.log('error 2')
+                    reject(chrome.runtime.error)
+
                 } else {
                     groupedTabs.set(groupId, [tabId])
                     resolve()
@@ -174,8 +187,15 @@ function groupTab(tabId, groupId) {
 }
 
 function sendMessage(message) {
-    console.log('sent message', message)
-    chrome.runtime.sendMessage(message)
+    chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error('sendMessage | autosave', chrome.runtime.lastError)
+        }
+        if (!response?.received) {
+            properties.unseenTabs++
+            setBadgeText(String(properties.unseenTabs))
+        }
+    })
 }
 
 function updateStorage(object) {
@@ -190,6 +210,17 @@ function updateStorage(object) {
     })
 }
 
+function setBadgeText(text) {
+    chrome.action.setBadgeText({ text })
+}
+
+function setTitle(title) {
+    chrome.action.setTitle('You have new saved tabs')
+}
+
+function shouldThrottleHighlightEvent(initialTime, finalTime) {
+    return (finalTime - initialTime) < MAX_THROTTLE_QUERY_TABS
+}
 
 // EVENTS 
 
@@ -206,7 +237,8 @@ chrome.runtime.onMessage.addListener(
 
 chrome.processes.onUpdated.addListener((processes) => {
     try {
-        const processesInfo = Array.from(inactiveTabs.values())
+        console.log('inactive tabs', Array.from(inactiveTabsProcessId.values()))
+        const processesInfo = Array.from(inactiveTabsProcessId.values())
             .filter(pId => processes[pId])
             .map(pId => {
                 const { cpu, network, tasks } = processes[pId]
@@ -238,9 +270,8 @@ chrome.processes.onUpdated.addListener((processes) => {
 
 })
 
-chrome.windows.onCreated.addListener((window) => fallbackWindowId = window.id)
-chrome.tabs.onCreated.addListener(function (tab) {
-    if (!tab.active && tab.status === 'complete') addTab(tab.id)
+chrome.tabs.onCreated.addListener((tab) => {
+    addTab(tab.id)
 })
 
 chrome.tabs.onRemoved.addListener(function (tabId, removeInfo) {
@@ -248,14 +279,29 @@ chrome.tabs.onRemoved.addListener(function (tabId, removeInfo) {
 })
 
 chrome.tabs.onActivated.addListener(({ tabId }) => {
-    inactiveTabs.delete(tabId)
+    inactiveTabsProcessId.delete(tabId)
 })
 
 
-chrome.tabs.onHighlighted.addListener(async () => {
-    await new Promise((resolve) => setTimeout(resolve, MAX_TIMEOUT_UPDATE_TABS)) //avoids data spikes caused by fast tab highlighting
+chrome.tabs.onHighlighted.addListener(() => {
     queryTabs()
+
 })
+
+// INTERVALS
+
+setInterval(() => {
+    wastefulTabs.clear()
+}, RESET_TABS_TIME)
+
+setInterval(() => {
+    // send telemetry
+    /*
+    const telemetry = { tabs: {reason:, timeToSuspend:, autosaved:}, totalInactiveTabsProcessId:}
+    */
+
+
+}, TELEMETRY_TIME)
 
 
 
