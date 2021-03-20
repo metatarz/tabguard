@@ -30,10 +30,12 @@
           </Dropdown>
         </div>
       </div>
-      <button @click="clearTabsFromStorage()">Delete all</button>
+      <button class="remove-button" @click="clearTabsFromStorage()">
+        Delete all
+      </button>
     </div>
     <div v-else>
-      <p>Currently, you don't have any saved tabs</p>
+      <p class="text-light">Currently, you don't have any saved tabs</p>
     </div>
   </div>
 </template>
@@ -63,7 +65,6 @@ export default {
     this.resetActionState();
     getFromStorage("tabs", (result) => {
       if (result?.tabs) {
-        console.log(result.tabs);
         this.updateTabs(result.tabs);
       }
     });
@@ -144,6 +145,10 @@ $memory-color: #44fd32;
   }
 }
 
+.text-light {
+  color: #4a4a4a;
+}
+
 .tab-host {
   color: gray;
   font-size: 12px;
@@ -192,5 +197,19 @@ $memory-color: #44fd32;
 
 .title {
   text-align: left;
+}
+
+.remove-button {
+  cursor: pointer;
+  margin-bottom: 30px;
+  padding: 8px 16px;
+  background-color: transparent;
+  color: #1a73e8;
+  border: 1px solid rgba(218, 220, 224);
+  border-radius: 4px;
+
+  &:hover {
+    background-color: rgba(66, 133, 244, 0.04);
+  }
 }
 </style>

@@ -4,7 +4,7 @@
       <label for="autosave">Auto saved tabs</label>
       <input name="autosave" id="autosave" v-model="autosave" type="checkbox" />
     </div>
-    <div>
+    <!--<div>
       <label for="telemetry">Allow usage metrics</label>
       <input
         name="telemetry"
@@ -13,6 +13,7 @@
         type="checkbox"
       />
     </div>
+    -->
   </div>
 </template>
 <script>

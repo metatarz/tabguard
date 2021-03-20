@@ -1,23 +1,32 @@
 {
-    "manifest_version": 3,
-    "name": "TabGuard",
-    "description": "Find out which inactive tabs are wasting resources",
-    "version": "1.0",
-    "author": "Digital Sustainability Audits",
-    "action": {
-        "default_icon": "assets/icon.png",
-        "default_title": "TabGuard saved resources",
-        "default_popup": "popup/dist/index.html"
+  "manifest_version": 3,
+  "name": "Tabguard",
+  "description": "Find out which inactive tabs are wasting resources",
+  "version": "1.0.0",
+  "author": "Digital Sustainability Audits",
+  "icons": {
+    "16": "assets/icon_16.png",
+    "48": "assets/icon_48.png",
+    "128": "assets/icon_128.png",
+    "256": "assets/icon_256.png",
+    "512": "assets/icon_512.png",
+    "1024": "assets/icon_1024.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "assets/icon_16.png",
+      "48": "assets/icon_48.png",
+      "128": "assets/icon_128.png",
+      "256": "assets/icon_256.png",
+      "512": "assets/icon_512.png",
+      "1024": "assets/icon_1024.png"
     },
-    "background": {
-        "service_worker": "background.js",
-        "pages": [
-            "background/background.html"
-        ]
-    },
-    "minimum_chrome_version": "88",
-    "permissions": [
-        "tabs",
-        "processes",
-        "storage"    ]
+    "default_title": "TabGuard saved resources",
+    "default_popup": "popup/dist/index.html"
+  },
+  "background": {
+    "service_worker": "main.bundle.js"
+  },
+  "minimum_chrome_version": "88",
+  "permissions": ["tabs", "processes", "storage"]
 }
