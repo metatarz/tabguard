@@ -1,4 +1,4 @@
-[![Tabguard](https://raw.githubusercontent.com/sirdmon/tabguard/master/src/assets/logo.png)
+![Tabguard](https://raw.githubusercontent.com/sirdmon/tabguard/master/src/assets/logo-520.png)
 
 # Tabguard - Google Chrome Extension -
 
@@ -14,7 +14,7 @@ While most browsers have a number of policies to mitigate the performance impact
 
 # How does it work
 
-[![Tabguard in action](https://raw.githubusercontent.com/sirdmon/tabguard/master/src/assets/tabguard-in-action.png)]
+![Tabguard in action](https://raw.githubusercontent.com/sirdmon/tabguard/master/src/assets/tabguard-in-action.png)
 
 The extension monitors the CPU / Memory / Network usage of all browser processes linked to opened tabs.
 Whenever an inactive tab (i.e not highlighted or opened by the user) exceeds the memory, CPU and network thresholds it is automatically suspended thus preventing it from wasting up resources.
