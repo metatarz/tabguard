@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tabguard",
   "description": "Find out which inactive tabs are wasting resources",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Digital Sustainability Audits",
   "icons": {
     "16": "assets/icon_16.png",

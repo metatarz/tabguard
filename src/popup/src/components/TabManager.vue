@@ -35,7 +35,9 @@
       </button>
     </div>
     <div v-else>
-      <p class="text-light">Currently, you don't have any saved tabs</p>
+      <p class="text-light">
+        Currently, you don't have any saved tabs. Keep on surfing the net!
+      </p>
     </div>
   </div>
 </template>
